@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Loan KPIs Calculator</title>
+  <style>
+    /* Basic reset */
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: Arial, sans-serif; background: #f0f2f5; color: #333; padding: 20px; }
+    h1 { text-align: center; margin-bottom: 20px; }
+    .container { max-width: 900px; margin: 0 auto; background: #fff; padding: 20px; border-radius: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+    .form-group { display: flex; align-items: center; margin-bottom: 15px; }
+    .form-group label { flex: 0 0 200px; font-weight: bold; }
+    .form-group input, .form-group select { flex: 1; padding: 8px; border: 1px solid #ccc; border-radius: 4px; }
+    .description { font-size: 0.9em; color: #666; margin-left: 200px; margin-top: -12px; margin-bottom: 10px; }
+    button { display: block; margin: 20px auto; padding: 10px 20px; background: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 1em; }
+    button:hover { background: #0056b3; }
+    .results { margin-top: 30px; }
+    .results h2 { margin-bottom: 10px; }
+    .results ul { list-style: none; padding-left: 0; }
+    .results li { margin-bottom: 5px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+    th, td { border: 1px solid #ddd; padding: 8px; text-align: right; }
+    th { background: #007bff; color: white; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Loan KPIs & Amortization Calculator</h1>
+    <div class="form-group">
+      <label for="simType">Simulation Type:</label>
+      <select id="simType">
+        <option value="payment">Calculate Monthly Payment</option>
+        <option value="duration">Calculate Loan Duration</option>
+        <option value="maxCapital">Calculate Max Loan Amount</option>
+      </select>
+    </div>
+    <!-- Loan amount -->
+    <div class="form-group" id="group-loanAmount">
+      <label for="loanAmount">Capital (Principal):</label>
+      <input type="number" id="loanAmount" step="0.01" />
+    </div>
+    <div class="description" id="desc-loanAmount">Enter the total loan amount (e.g. 100000.00).</div>
+    <!-- Monthly payment -->
+    <div class="form-group" id="group-monthlyPayment" style="display:none;">
+      <label for="monthlyPayment">Monthly Payment:</label>
+      <input type="number" id="monthlyPayment" step="0.01" />
+    </div>
+    <div class="description" id="desc-monthlyPayment" style="display:none;">Enter the monthly payment you can afford (e.g. 1200.00).</div>
+    <!-- Interest rate -->
+    <div class="form-group">
+      <label for="interestRate">Annual Interest Rate (%):</label>
+      <input type="number" id="interestRate" step="0.01" />
+    </div>
+    <div class="description">Annual nominal interest rate in percent (e.g. 5.5).</div>
+    <!-- Term -->
+    <div class="form-group" id="group-term">
+      <label for="termYears">Term (Years):</label>
+      <input type="number" id="termYears" />
+    </div>
+    <div class="form-group" id="group-termMonths">
+      <label for="termMonths">Term (Additional Months):</label>
+      <input type="number" id="termMonths" min="0" max="11" />
+    </div>
+    <div class="description" id="desc-term">Define loan term (e.g. 15 years and 6 months).</div>
+    <!-- Insurance -->
+    <div class="form-group">
+      <label for="insuranceType">Insurance Type:</label>
+      <select id="insuranceType">
+        <option value="monthly">Monthly Payment</option>
+        <option value="annualPct">Annual Percentage of Capital</option>
+        <option value="annualFixed">Fixed Annual Payment</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label for="insuranceValue">Insurance Value:</label>
+      <input type="number" id="insuranceValue" step="0.01" />
+    </div>
+    <div class="description">If monthly: enter monthly cost. If percentage: enter % (e.g. 0.3 for 0.3%). If fixed: enter annual amount.</div>
+    <button id="calculateBtn">Calculate</button>
+    <!-- Results -->
+    <div class="results" id="results"></div>
+    <!-- Amortization Table -->
+    <div id="amortizationTable"></div>
+  </div>
+
+  <script>
+    const simTypeEl = document.getElementById('simType');
+    const groups = {
+      loanAmount: document.getElementById('group-loanAmount'),
+      monthlyPayment: document.getElementById('group-monthlyPayment'),
+      term: [document.getElementById('group-term'), document.getElementById('group-termMonths')]
+    };
+    const desc = {
+      loanAmount: document.getElementById('desc-loanAmount'),
+      monthlyPayment: document.getElementById('desc-monthlyPayment'),
+      term: document.getElementById('desc-term')
+    };
+
+    simTypeEl.addEventListener('change', () => {
+      const type = simTypeEl.value;
+      // hide all
+      groups.loanAmount.style.display = 'none';
+      groups.monthlyPayment.style.display = 'none';
+      groups.term.forEach(el => el.style.display = 'none');
+      desc.loanAmount.style.display = 'none';
+      desc.monthlyPayment.style.display = 'none';
+      desc.term.style.display = 'none';
+      // show needed
+      if (type === 'payment') {
+        groups.loanAmount.style.display = '';
+        groups.term.forEach(el => el.style.display = '');
+        desc.loanAmount.style.display = '';
+        desc.term.style.display = '';
+      } else if (type === 'duration') {
+        groups.loanAmount.style.display = '';
+        groups.monthlyPayment.style.display = '';
+        desc.loanAmount.style.display = '';
+        desc.monthlyPayment.style.display = '';
+      } else if (type === 'maxCapital') {
+        groups.monthlyPayment.style.display = '';
+        groups.term.forEach(el => el.style.display = '');
+        desc.monthlyPayment.style.display = '';
+        desc.term.style.display = '';
+      }
+    });
+
+    document.getElementById('calculateBtn').addEventListener('click', () => {
+      // read inputs
+      let P = parseFloat(document.getElementById('loanAmount').value) || 0;
+      const annualRate = parseFloat(document.getElementById('interestRate').value) / 100;
+      const r = annualRate / 12;
+      let years = parseInt(document.getElementById('termYears').value) || 0;
+      let months = parseInt(document.getElementById('termMonths').value) || 0;
+      let n = years*12 + months;
+      const paymentInput = parseFloat(document.getElementById('monthlyPayment').value) || 0;
+      const insuranceType = document.getElementById('insuranceType').value;
+      const insVal = parseFloat(document.getElementById('insuranceValue').value) || 0;
+
+      // compute monthly insurance cost
+      let insMonthly = 0;
+      if (insuranceType === 'monthly') {
+        insMonthly = insVal;
+      } else if (insuranceType === 'annualPct') {
+        insMonthly = (P * (insVal/100)) / 12;
+      } else if (insuranceType === 'annualFixed') {
+        insMonthly = insVal / 12;
+      }
+
+      let paymentNoIns, totalPayment, totalInterest, durationMonths, maxCapital;
+      if (simTypeEl.value === 'payment') {
+        paymentNoIns = P * r / (1 - Math.pow(1+r, -n));
+        totalPayment = (paymentNoIns + insMonthly) * n;
+        totalInterest = (paymentNoIns * n) - P;
+      } else if (simTypeEl.value === 'duration') {
+        paymentNoIns = paymentInput - insMonthly;
+        durationMonths = Math.log(paymentNoIns/(paymentNoIns - P*r)) / Math.log(1+r);
+        n = Math.ceil(durationMonths);
+        totalPayment = paymentInput * n;
+        totalInterest = (paymentNoIns * n) - P;
+      } else if (simTypeEl.value === 'maxCapital') {
+        paymentNoIns = paymentInput - insMonthly;
+        maxCapital = paymentNoIns * (1 - Math.pow(1+r, -n)) / r;
+        P = maxCapital;
+        totalPayment = paymentInput * n;
+        totalInterest = (paymentNoIns * n) - P;
+      }
+
+      // render results
+      const resDiv = document.getElementById('results');
+      resDiv.innerHTML = '<h2>Summary of Results</h2>';
+      const ul = document.createElement('ul');
+      if (simTypeEl.value === 'payment') {
+        ul.innerHTML += `<li>Monthly Payment (excl. insurance): ${paymentNoIns.toFixed(2)}</li>`;
+      } else if (simTypeEl.value === 'duration') {
+        const y = Math.floor(n/12), m = n%12;
+        ul.innerHTML += `<li>Calculated Duration: ${y} years and ${m} months (${n} months)</li>`;
+      } else if (simTypeEl.value === 'maxCapital') {
+        ul.innerHTML += `<li>Maximum Capital: ${P.toFixed(2)}</li>`;
+      }
+      ul.innerHTML += `<li>Total Insurance Paid: ${(insMonthly*n).toFixed(2)}</li>`;
+      ul.innerHTML += `<li>Total Interest Paid: ${totalInterest.toFixed(2)}</li>`;
+      ul.innerHTML += `<li>Total Payment (incl. insurance): ${totalPayment.toFixed(2)}</li>`;
+      resDiv.appendChild(ul);
+
+      // amortization table
+      const tableDiv = document.getElementById('amortizationTable');
+      tableDiv.innerHTML = '<h2>Amortization Schedule</h2>';
+      const table = document.createElement('table');
+      table.innerHTML = `
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Begin Balance</th>
+            <th>Payment</th>
+            <th>Insurance</th>
+            <th>Interest</th>
+            <th>Principal</th>
+            <th>End Balance</th>
+          </tr>
+        </thead>
+      `;
+      const tbody = document.createElement('tbody');
+      let balance = P;
+      for (let i=1; i<=n; i++) {
+        let interest = balance * r;
+        let principal = paymentNoIns - interest;
+        let endBal = balance - principal;
+        const row = document.createElement('tr');
+        row.innerHTML = `
+          <td>${i}</td>
+          <td>${balance.toFixed(2)}</td>
+          <td>${(paymentNoIns+insMonthly).toFixed(2)}</td>
+          <td>${insMonthly.toFixed(2)}</td>
+          <td>${interest.toFixed(2)}</td>
+          <td>${principal.toFixed(2)}</td>
+          <td>${endBal.toFixed(2)}</td>
+        `;
+        tbody.appendChild(row);
+        balance = endBal;
+      }
+      table.appendChild(tbody);
+      tableDiv.appendChild(table);
+    });
+
+    // initialize view
+    simTypeEl.dispatchEvent(new Event('change'));
+  </script>
+</body>
+</html>

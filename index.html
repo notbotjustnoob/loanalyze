@@ -23,7 +23,9 @@
     table { width: 100%; border-collapse: collapse; margin-top: 20px; }
     th, td { border: 1px solid #ddd; padding: 8px; text-align: right; }
     th { background: #007bff; color: white; }
+    .chart-container { margin-top: 30px; }
   </style>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
   <div class="container">
@@ -36,25 +38,21 @@
         <option value="maxCapital">Calculate Max Loan Amount</option>
       </select>
     </div>
-    <!-- Loan amount -->
     <div class="form-group" id="group-loanAmount">
       <label for="loanAmount">Capital (Principal):</label>
       <input type="number" id="loanAmount" step="0.01" />
     </div>
     <div class="description" id="desc-loanAmount">Enter the total loan amount (e.g. 100000.00).</div>
-    <!-- Monthly payment -->
     <div class="form-group" id="group-monthlyPayment" style="display:none;">
       <label for="monthlyPayment">Monthly Payment:</label>
       <input type="number" id="monthlyPayment" step="0.01" />
     </div>
     <div class="description" id="desc-monthlyPayment" style="display:none;">Enter the monthly payment you can afford (e.g. 1200.00).</div>
-    <!-- Interest rate -->
     <div class="form-group">
       <label for="interestRate">Annual Interest Rate (%):</label>
       <input type="number" id="interestRate" step="0.01" />
     </div>
     <div class="description">Annual nominal interest rate in percent (e.g. 5.5).</div>
-    <!-- Term -->
     <div class="form-group" id="group-term">
       <label for="termYears">Term (Years):</label>
       <input type="number" id="termYears" />
@@ -64,7 +62,6 @@
       <input type="number" id="termMonths" min="0" max="11" />
     </div>
     <div class="description" id="desc-term">Define loan term (e.g. 15 years and 6 months).</div>
-    <!-- Insurance -->
     <div class="form-group">
       <label for="insuranceType">Insurance Type:</label>
       <select id="insuranceType">
@@ -79,10 +76,12 @@
     </div>
     <div class="description">If monthly: enter monthly cost. If percentage: enter % (e.g. 0.3 for 0.3%). If fixed: enter annual amount.</div>
     <button id="calculateBtn">Calculate</button>
-    <!-- Results -->
     <div class="results" id="results"></div>
-    <!-- Amortization Table -->
     <div id="amortizationTable"></div>
+    <div class="chart-container">
+      <h2>Balance Over Time</h2>
+      <canvas id="amortChart"></canvas>
+    </div>
   </div>
 
   <script>
@@ -97,17 +96,16 @@
       monthlyPayment: document.getElementById('desc-monthlyPayment'),
       term: document.getElementById('desc-term')
     };
+    let amortChart;
 
     simTypeEl.addEventListener('change', () => {
       const type = simTypeEl.value;
-      // hide all
       groups.loanAmount.style.display = 'none';
       groups.monthlyPayment.style.display = 'none';
       groups.term.forEach(el => el.style.display = 'none');
       desc.loanAmount.style.display = 'none';
       desc.monthlyPayment.style.display = 'none';
       desc.term.style.display = 'none';
-      // show needed
       if (type === 'payment') {
         groups.loanAmount.style.display = '';
         groups.term.forEach(el => el.style.display = '');
@@ -127,7 +125,6 @@
     });
 
     document.getElementById('calculateBtn').addEventListener('click', () => {
-      // read inputs
       let P = parseFloat(document.getElementById('loanAmount').value) || 0;
       const annualRate = parseFloat(document.getElementById('interestRate').value) / 100;
       const r = annualRate / 12;
@@ -137,18 +134,11 @@
       const paymentInput = parseFloat(document.getElementById('monthlyPayment').value) || 0;
       const insuranceType = document.getElementById('insuranceType').value;
       const insVal = parseFloat(document.getElementById('insuranceValue').value) || 0;
-
-      // compute monthly insurance cost
       let insMonthly = 0;
-      if (insuranceType === 'monthly') {
-        insMonthly = insVal;
-      } else if (insuranceType === 'annualPct') {
-        insMonthly = (P * (insVal/100)) / 12;
-      } else if (insuranceType === 'annualFixed') {
-        insMonthly = insVal / 12;
-      }
-
-      let paymentNoIns, totalPayment, totalInterest, durationMonths, maxCapital;
+      if (insuranceType === 'monthly') insMonthly = insVal;
+      else if (insuranceType === 'annualPct') insMonthly = (P * (insVal/100)) / 12;
+      else if (insuranceType === 'annualFixed') insMonthly = insVal / 12;
+      let paymentNoIns, totalPayment, totalInterest, durationMonths;
       if (simTypeEl.value === 'payment') {
         paymentNoIns = P * r / (1 - Math.pow(1+r, -n));
         totalPayment = (paymentNoIns + insMonthly) * n;
@@ -159,72 +149,60 @@
         n = Math.ceil(durationMonths);
         totalPayment = paymentInput * n;
         totalInterest = (paymentNoIns * n) - P;
-      } else if (simTypeEl.value === 'maxCapital') {
+      } else {
         paymentNoIns = paymentInput - insMonthly;
-        maxCapital = paymentNoIns * (1 - Math.pow(1+r, -n)) / r;
-        P = maxCapital;
+        P = paymentNoIns * (1 - Math.pow(1+r, -n)) / r;
         totalPayment = paymentInput * n;
         totalInterest = (paymentNoIns * n) - P;
       }
-
-      // render results
       const resDiv = document.getElementById('results');
       resDiv.innerHTML = '<h2>Summary of Results</h2>';
       const ul = document.createElement('ul');
-      if (simTypeEl.value === 'payment') {
-        ul.innerHTML += `<li>Monthly Payment (excl. insurance): ${paymentNoIns.toFixed(2)}</li>`;
-      } else if (simTypeEl.value === 'duration') {
+      if (simTypeEl.value === 'payment') ul.innerHTML += `<li>Monthly Payment (excl. insurance): ${paymentNoIns.toFixed(2)}</li>`;
+      else if (simTypeEl.value === 'duration') {
         const y = Math.floor(n/12), m = n%12;
         ul.innerHTML += `<li>Calculated Duration: ${y} years and ${m} months (${n} months)</li>`;
-      } else if (simTypeEl.value === 'maxCapital') {
-        ul.innerHTML += `<li>Maximum Capital: ${P.toFixed(2)}</li>`;
-      }
+      } else ul.innerHTML += `<li>Maximum Capital: ${P.toFixed(2)}</li>`;
       ul.innerHTML += `<li>Total Insurance Paid: ${(insMonthly*n).toFixed(2)}</li>`;
       ul.innerHTML += `<li>Total Interest Paid: ${totalInterest.toFixed(2)}</li>`;
       ul.innerHTML += `<li>Total Payment (incl. insurance): ${totalPayment.toFixed(2)}</li>`;
       resDiv.appendChild(ul);
-
-      // amortization table
       const tableDiv = document.getElementById('amortizationTable');
       tableDiv.innerHTML = '<h2>Amortization Schedule</h2>';
       const table = document.createElement('table');
       table.innerHTML = `
         <thead>
-          <tr>
-            <th>#</th>
-            <th>Begin Balance</th>
-            <th>Payment</th>
-            <th>Insurance</th>
-            <th>Interest</th>
-            <th>Principal</th>
-            <th>End Balance</th>
-          </tr>
-        </thead>
-      `;
+          <tr><th>#</th><th>Begin Balance</th><th>Payment</th><th>Insurance</th><th>Interest</th><th>Principal</th><th>End Balance</th></tr>
+        </thead>`;
       const tbody = document.createElement('tbody');
       let balance = P;
+      const labels = [], balances = [];
       for (let i=1; i<=n; i++) {
         let interest = balance * r;
         let principal = paymentNoIns - interest;
         let endBal = balance - principal;
+        labels.push(i);
+        balances.push(endBal.toFixed(2));
         const row = document.createElement('tr');
         row.innerHTML = `
-          <td>${i}</td>
-          <td>${balance.toFixed(2)}</td>
-          <td>${(paymentNoIns+insMonthly).toFixed(2)}</td>
-          <td>${insMonthly.toFixed(2)}</td>
-          <td>${interest.toFixed(2)}</td>
-          <td>${principal.toFixed(2)}</td>
-          <td>${endBal.toFixed(2)}</td>
+          <td>${i}</td><td>${balance.toFixed(2)}</td><td>${(paymentNoIns+insMonthly).toFixed(2)}</td><td>${insMonthly.toFixed(2)}</td><td>${interest.toFixed(2)}</td><td>${principal.toFixed(2)}</td><td>${endBal.toFixed(2)}</td>
         `;
         tbody.appendChild(row);
         balance = endBal;
       }
       table.appendChild(tbody);
       tableDiv.appendChild(table);
+      const ctx = document.getElementById('amortChart').getContext('2d');
+      if (amortChart) amortChart.destroy();
+      amortChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels,
+          datasets: [{ label: 'Remaining Balance', data: balances, fill: false, tension: 0.1 }]
+        },
+        options: { scales: { x: { title: { display: true, text: 'Period (Months)' }}, y: { title: { display: true, text: 'Balance'} }} }
+      });
     });
-
-    // initialize view
     simTypeEl.dispatchEvent(new Event('change'));
   </script>
 </body>
